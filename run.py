@@ -4,6 +4,10 @@ import time
 import os
 from dotenv import load_dotenv
 import config
+from decimal import Decimal
+from telegram import Update, ForceReply, message, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler, ConversationHandler
+import threading
 
 load_dotenv()
 api_key = os.getenv('API_KEY')
@@ -17,6 +21,7 @@ safety_timer = 0
 if not api_key or not api_key_secret:
     raise ValueError("API_KEY or API_KEY_SECRET not set in the environment.")
 
+
 # Initialiseer een exchange object
 exchange = ccxt.binance({
     'rateLimit': 2000,
@@ -25,13 +30,30 @@ exchange = ccxt.binance({
     'secret': api_key_secret,
 })
 
+
+def getBalance(ticker):
+    try:
+        balance = exchange.fetchBalance(params = {})['free'][ticker]
+        return Decimal(balance)
+    except Exception as e: print(e)
+
+def hasSufficientBalance():
+    pair = config.pair
+    base = pair.split('/')[1]
+    current_balance = getBalance(base)
+    trading_limit = config.trading_limit
+    return False if current_balance < trading_limit else True
+
+
+
 def placeOrder(pair,side,quantity):
     try:
         order = exchange.create_order(pair, 'market', side, quantity)
         if side == 'buy':
             ordersDict[order['id']] = {'pair': pair, 'quantity': quantity, 'status': 'open'}
             print(ordersDict)
-    except Exception as e: print(e)
+    except Exception as e:
+        print(e)
 
 
 
@@ -146,6 +168,33 @@ def getQuantity(trading_limit,ticker):
 
 
 
+
+def sendMessage(text) -> None:
+    try:
+        tg_token = os.getenv('TG_TOKEN')
+        tg_chat_id = os.getenv('TG_CHAT_ID')
+        updater = Updater(token=tg_token, use_context=True)
+        updater.bot.send_message(chat_id=tg_chat_id,text=text)
+        print(text)
+    except Exception as e: print(e)
+
+def main() -> None:
+    """Start the bot."""
+    try:
+        tg_token = os.getenv('TG_TOKEN')
+        tg_chat_id = os.getenv('TG_CHAT_ID')
+        updater = Updater(token=tg_token, use_context=True)
+        dispatcher = updater.dispatcher
+        updater.start_polling()
+        updater.bot.send_message(chat_id=tg_chat_id,text=f'Telegram bot started succesfully!!')
+    except Exception as e: print(e)
+
+
+
+try:
+    if config.enable_tg:
+        threading.Thread(target=main()).start() #start tg bot thread
+except Exception as e: sendMessage(e)
 
 # Plan de functie om elke seconde uit te voeren
 schedule.every(1).seconds.do(fetchOrder)
