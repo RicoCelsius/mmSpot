@@ -1,0 +1,3 @@
+ccxt==1.75.13
+python-dotenv==0.21.0
+schedule==1.1.0
